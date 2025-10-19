@@ -164,7 +164,12 @@
     
     <div class="main-content">
         <div class="view-container">
-            <h1>All Trades</h1>    
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                <h1>All Trades</h1>
+                <button type="button" class="btn" style="background-color: #28a745;" onclick="window.location.href='/export-trades'">
+                    📊 Export to Excel
+                </button>
+            </div>    
             {% if trades %}
             <table>
                 <thead>
@@ -185,7 +190,7 @@
                 </thead>
                 <tbody>
                     {% for trade in trades %}
-                    <tr>
+                    <tr onclick="window.location.href='/trade/{{ trade[0] }}'" style="cursor: pointer;">
                         <td>{{ trade[0] }}</td>
                         <td>
                             <span class="{% if trade[1] == 'B' %}side-buy{% else %}side-sell{% endif %}">

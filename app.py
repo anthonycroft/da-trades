@@ -5,6 +5,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import csv
 import io
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
 
 # Create the Flask application
 app = Flask(__name__)
@@ -419,6 +422,262 @@ def view_submissions():
     
     return render_template('view.html', 
                           trades=trades, 
+                          username=session.get('username'),
+                          tenant_name=session.get('tenant_name'),
+                          role=session.get('role'))
+
+
+# Route: View single trade details
+@app.route('/trade/<int:trade_id>')
+@login_required
+def trade_detail(trade_id):
+    conn = sqlite3.connect('data.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT 
+            trades.id,
+            trades.side,
+            trades.trade_date,
+            trades.settlement_date,
+            trades.exec_time,
+            trades.security,
+            trades.isin,
+            trades.cusip,
+            trades.iss_country,
+            trades.maturity_date,
+            trades.quantity,
+            trades.currency,
+            trades.price,
+            trades.net_amount,
+            trades.yield,
+            trades.exec_venue,
+            trades.broker_name,
+            trades.broker_code,
+            trades.trade_ref,
+            trades.seq_number,
+            trades.euroclear,
+            trades.status,
+            trades.notes,
+            trades.created_at,
+            users.username
+        FROM trades 
+        JOIN users ON trades.user_id = users.id
+        WHERE trades.id = ? AND trades.tenant_id = ?
+    ''', (trade_id, session['tenant_id']))
+    
+    trade_row = cursor.fetchone()
+    conn.close()
+    
+    if not trade_row:
+        flash('Trade not found.', 'error')
+        return redirect(url_for('view_submissions'))
+    
+    # Convert to dictionary for easier template access
+    trade = {
+        'id': trade_row[0],
+        'side': trade_row[1],
+        'trade_date': trade_row[2],
+        'settlement_date': trade_row[3],
+        'exec_time': trade_row[4],
+        'security': trade_row[5],
+        'isin': trade_row[6],
+        'cusip': trade_row[7],
+        'iss_country': trade_row[8],
+        'maturity_date': trade_row[9],
+        'quantity': trade_row[10],
+        'currency': trade_row[11],
+        'price': trade_row[12],
+        'net_amount': trade_row[13],
+        'yield_val': trade_row[14],
+        'exec_venue': trade_row[15],
+        'broker_name': trade_row[16],
+        'broker_code': trade_row[17],
+        'trade_ref': trade_row[18],
+        'seq_number': trade_row[19],
+        'euroclear': trade_row[20],
+        'status': trade_row[21],
+        'notes': trade_row[22],
+        'created_at': trade_row[23],
+        'username': trade_row[24]
+    }
+    
+    return render_template('trade_detail.html',
+                          trade=trade,
+                          username=session.get('username'),
+                          tenant_name=session.get('tenant_name'),
+                          role=session.get('role'))
+
+
+# Route: Edit trade (GET - show form, POST - save changes)
+@app.route('/trade/<int:trade_id>/edit', methods=['GET', 'POST'])
+@login_required
+def trade_edit(trade_id):
+    if request.method == 'POST':
+        # Get form data
+        side = request.form.get('side')
+        trade_date = request.form.get('trade_date')
+        settlement_date = request.form.get('settlement_date')
+        exec_time = request.form.get('exec_time')
+        
+        security = request.form.get('security')
+        isin = request.form.get('isin')
+        cusip = request.form.get('cusip')
+        iss_country = request.form.get('iss_country')
+        maturity_date = request.form.get('maturity_date')
+        
+        quantity_str = request.form.get('quantity')
+        currency = request.form.get('currency')
+        price_str = request.form.get('price')
+        net_amount_str = request.form.get('net_amount')
+        yield_str = request.form.get('yield')
+        exec_venue = request.form.get('exec_venue')
+        
+        broker_name = request.form.get('broker_name')
+        broker_code = request.form.get('broker_code')
+        
+        trade_ref = request.form.get('trade_ref')
+        seq_number = request.form.get('seq_number')
+        euroclear = request.form.get('euroclear')
+        status = request.form.get('status')
+        notes = request.form.get('notes')
+        
+        # Validate required fields
+        if not all([side, trade_date, settlement_date, security, quantity_str, currency, price_str, broker_name]):
+            flash('Please fill in all required fields.', 'error')
+            return redirect(url_for('trade_edit', trade_id=trade_id))
+        
+        # Convert numeric fields
+        try:
+            quantity = float(quantity_str)
+            price = float(price_str)
+            
+            # Auto-calculate net amount if not provided
+            if net_amount_str and net_amount_str.strip():
+                net_amount = float(net_amount_str)
+            else:
+                net_amount = quantity * price
+                if side == 'S':
+                    net_amount = abs(net_amount)
+                else:
+                    net_amount = -abs(net_amount)
+            
+            yield_val = float(yield_str) if yield_str and yield_str.strip() else None
+            
+        except ValueError:
+            flash('Invalid numeric values entered.', 'error')
+            return redirect(url_for('trade_edit', trade_id=trade_id))
+        
+        # Validate dates
+        try:
+            trade_dt = datetime.strptime(trade_date, '%Y-%m-%d')
+            settle_dt = datetime.strptime(settlement_date, '%Y-%m-%d')
+            
+            if settle_dt <= trade_dt:
+                flash('Settlement date must be after trade date.', 'error')
+                return redirect(url_for('trade_edit', trade_id=trade_id))
+        except ValueError:
+            flash('Invalid date format.', 'error')
+            return redirect(url_for('trade_edit', trade_id=trade_id))
+        
+        # Convert empty strings to None for optional fields
+        exec_time = exec_time if exec_time else None
+        isin = isin if isin else None
+        cusip = cusip if cusip else None
+        iss_country = iss_country if iss_country else None
+        maturity_date = maturity_date if maturity_date else None
+        exec_venue = exec_venue if exec_venue else None
+        broker_code = broker_code if broker_code else None
+        trade_ref = trade_ref if trade_ref else None
+        seq_number = seq_number if seq_number else None
+        euroclear = euroclear if euroclear else None
+        notes = notes if notes else None
+        
+        # Update in database
+        conn = sqlite3.connect('data.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE trades SET
+                side = ?, trade_date = ?, settlement_date = ?, exec_time = ?,
+                security = ?, isin = ?, cusip = ?, iss_country = ?, maturity_date = ?,
+                quantity = ?, currency = ?, price = ?, net_amount = ?, yield = ?, exec_venue = ?,
+                broker_name = ?, broker_code = ?,
+                trade_ref = ?, seq_number = ?, euroclear = ?, status = ?, notes = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND tenant_id = ?
+        ''', (
+            side, trade_date, settlement_date, exec_time,
+            security, isin, cusip, iss_country, maturity_date,
+            quantity, currency, price, net_amount, yield_val, exec_venue,
+            broker_name, broker_code,
+            trade_ref, seq_number, euroclear, status, notes,
+            trade_id, session['tenant_id']
+        ))
+        conn.commit()
+        conn.close()
+        
+        flash('Trade updated successfully!', 'success')
+        return redirect(url_for('trade_detail', trade_id=trade_id))
+    
+    # GET request - show the edit form
+    conn = sqlite3.connect('data.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT 
+            trades.id, trades.side, trades.trade_date, trades.settlement_date, trades.exec_time,
+            trades.security, trades.isin, trades.cusip, trades.iss_country, trades.maturity_date,
+            trades.quantity, trades.currency, trades.price, trades.net_amount, trades.yield, trades.exec_venue,
+            trades.broker_name, trades.broker_code,
+            trades.trade_ref, trades.seq_number, trades.euroclear, trades.status, trades.notes
+        FROM trades 
+        WHERE trades.id = ? AND trades.tenant_id = ?
+    ''', (trade_id, session['tenant_id']))
+    
+    trade_row = cursor.fetchone()
+    conn.close()
+    
+    if not trade_row:
+        flash('Trade not found.', 'error')
+        return redirect(url_for('view_submissions'))
+    
+    # Format exec_time for datetime-local input if present
+    exec_time_formatted = ''
+    if trade_row[4]:
+        try:
+            dt = datetime.strptime(trade_row[4], '%Y-%m-%d %H:%M:%S')
+            exec_time_formatted = dt.strftime('%Y-%m-%dT%H:%M')
+        except:
+            pass
+    
+    # Convert to dictionary
+    trade = {
+        'id': trade_row[0],
+        'side': trade_row[1],
+        'trade_date': trade_row[2],
+        'settlement_date': trade_row[3],
+        'exec_time': trade_row[4],
+        'exec_time_formatted': exec_time_formatted,
+        'security': trade_row[5],
+        'isin': trade_row[6],
+        'cusip': trade_row[7],
+        'iss_country': trade_row[8],
+        'maturity_date': trade_row[9],
+        'quantity': trade_row[10],
+        'currency': trade_row[11],
+        'price': trade_row[12],
+        'net_amount': trade_row[13],
+        'yield_val': trade_row[14],
+        'exec_venue': trade_row[15],
+        'broker_name': trade_row[16],
+        'broker_code': trade_row[17],
+        'trade_ref': trade_row[18],
+        'seq_number': trade_row[19],
+        'euroclear': trade_row[20],
+        'status': trade_row[21],
+        'notes': trade_row[22]
+    }
+    
+    return render_template('trade_edit.html',
+                          trade=trade,
                           username=session.get('username'),
                           tenant_name=session.get('tenant_name'),
                           role=session.get('role'))

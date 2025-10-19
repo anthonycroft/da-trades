@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Trade Detail</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .header-banner {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-left {
+            color: white;
+        }
+        .header-right {
+            display: flex;
+            gap: 20px;
+        }
+        .header-right a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .header-right a:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+        .header-right a.logout-link {
+            background-color: #dc3545;
+        }
+        .header-right a.logout-link:hover {
+            background-color: #c82333;
+        }
+        .main-content {
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        .detail-container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        h1 {
+            color: #333;
+            margin: 0;
+        }
+        .trade-id {
+            color: #666;
+            font-size: 14px;
+        }
+        .section {
+            margin-bottom: 35px;
+        }
+        .section-title {
+            color: #2c3e50;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .field-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px 40px;
+        }
+        .field-group {
+            margin-bottom: 15px;
+        }
+        .field-label {
+            font-weight: bold;
+            color: #555;
+            font-size: 13px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .field-value {
+            color: #333;
+            font-size: 15px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .field-value.empty {
+            color: #999;
+            font-style: italic;
+        }
+        .side-buy {
+            color: #007bff;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .side-sell {
+            color: #dc3545;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .status-confirmed {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        .status-settled {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-failed {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status-accepted {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+        .number-positive {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .number-negative {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-banner">
+        <div class="header-content">
+            <div class="header-left">
+                Logged in as: <strong>{{ username }}</strong> ({{ tenant_name }})
+            </div>
+            <div class="header-right">
+                <a href="/form">Data Entry</a>
+                <a href="/view">View Data</a>
+                <a href="/import">Import Trades</a>
+                {% if role == 'admin' %}
+                <a href="/users">Manage Users</a>
+                {% endif %}
+                <a href="/logout" class="logout-link">Logout</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="detail-container">
+            <div class="detail-header">
+                <div>
+                    <h1>Trade Details</h1>
+                    <div class="trade-id">Trade ID: {{ trade.id }}</div>
+                </div>
+                <div>
+                    <span class="status-badge status-{{ trade.status|lower }}">
+                        {{ trade.status }}
+                    </span>
+                </div>
+            </div>
+            
+            <!-- Core Trade Information -->
+            <div class="section">
+                <div class="section-title">Core Trade Information</div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div class="field-label">Side</div>
+                        <div class="field-value">
+                            <span class="{% if trade.side == 'B' %}side-buy{% else %}side-sell{% endif %}">
+                                {{ 'BUY' if trade.side == 'B' else 'SELL' }}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Trade Date</div>
+                        <div class="field-value">{{ trade.trade_date }}</div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Settlement Date</div>
+                        <div class="field-value">{{ trade.settlement_date }}</div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Execution Time (GMT)</div>
+                        <div class="field-value {% if not trade.exec_time %}empty{% endif %}">
+                            {{ trade.exec_time or 'Not specified' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Security Information -->
+            <div class="section">
+                <div class="section-title">Security Information</div>
+                <div class="field-grid">
+                    <div class="field-group" style="grid-column: 1 / -1;">
+                        <div class="field-label">Security</div>
+                        <div class="field-value">{{ trade.security }}</div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">ISIN</div>
+                        <div class="field-value {% if not trade.isin %}empty{% endif %}">
+                            {{ trade.isin or 'Not specified' }}
+                        </div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">CUSIP</div>
+                        <div class="field-value {% if not trade.cusip %}empty{% endif %}">
+                            {{ trade.cusip or 'Not specified' }}
+                        </div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Issuer Country</div>
+                        <div class="field-value {% if not trade.iss_country %}empty{% endif %}">
+                            {{ trade.iss_country or 'Not specified' }}
+                        </div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Maturity Date</div>
+                        <div class="field-value {% if not trade.maturity_date %}empty{% endif %}">
+                            {{ trade.maturity_date or 'Not specified' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Trade Details -->
+            <div class="section">
+                <div class="section-title">Trade Details</div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div class="field-label">Quantity</div>
+                        <div class="field-value">{{ "{:,.2f}".format(trade.quantity) }}</div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Currency</div>
+                        <div class="field-value">{{ trade.currency }}</div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Price</div>
+                        <div class="field-value">{{ "{:.4f}".format(trade.price) }}</div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Net Amount</div>
+                        <div class="field-value {% if trade.net_amount < 0 %}number-negative{% else %}number-positive{% endif %}">
+                            {{ "{:,.2f}".format(trade.net_amount) }} {{ trade.currency }}
+                        </div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Yield (%)</div>
+                        <div class="field-value {% if not trade.yield_val %}empty{% endif %}">
+                            {{ "{:.3f}".format(trade.yield_val) if trade.yield_val else 'Not specified' }}
+                        </div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Execution Venue</div>
+                        <div class="field-value {% if not trade.exec_venue %}empty{% endif %}">
+                            {{ trade.exec_venue or 'Not specified' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Counterparty Information -->
+            <div class="section">
+                <div class="section-title">Counterparty Information</div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div class="field-label">Broker Name</div>
+                        <div class="field-value">{{ trade.broker_name }}</div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Broker Code</div>
+                        <div class="field-value {% if not trade.broker_code %}empty{% endif %}">
+                            {{ trade.broker_code or 'Not specified' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Reference & Status -->
+            <div class="section">
+                <div class="section-title">Reference Information</div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div class="field-label">Trade Reference</div>
+                        <div class="field-value {% if not trade.trade_ref %}empty{% endif %}">
+                            {{ trade.trade_ref or 'Not specified' }}
+                        </div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Sequence Number</div>
+                        <div class="field-value {% if not trade.seq_number %}empty{% endif %}">
+                            {{ trade.seq_number or 'Not specified' }}
+                        </div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Euroclear</div>
+                        <div class="field-value {% if not trade.euroclear %}empty{% endif %}">
+                            {{ trade.euroclear or 'Not specified' }}
+                        </div>
+                    </div>
+                </div>
+                
+                {% if trade.notes %}
+                <div class="field-group" style="margin-top: 20px;">
+                    <div class="field-label">Notes</div>
+                    <div class="field-value">{{ trade.notes }}</div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Metadata -->
+            <div class="section">
+                <div class="section-title">System Information</div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div class="field-label">Entered By</div>
+                        <div class="field-value">{{ trade.username }}</div>
+                    </div>
+                    
+                    <div class="field-group">
+                        <div class="field-label">Created At</div>
+                        <div class="field-value">{{ trade.created_at }}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" onclick="window.location.href='/view'">Back to List</button>
+                <button type="button" class="btn btn-primary" onclick="window.location.href='/trade/{{ trade.id }}/edit'">Edit Trade</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
