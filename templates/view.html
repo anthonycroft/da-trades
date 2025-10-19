@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>View Trades</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .header-banner {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-left {
+            color: white;
+        }
+        .header-right {
+            display: flex;
+            gap: 20px;
+        }
+        .header-right a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .header-right a:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+        .header-right a.logout-link {
+            background-color: #dc3545;
+        }
+        .header-right a.logout-link:hover {
+            background-color: #c82333;
+        }
+        .main-content {
+            max-width: 1400px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        .view-container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        .btn {
+            display: inline-block;
+            background-color: #28a745;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 4px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .btn:hover {
+            background-color: #218838;
+        }
+        .empty-message {
+            text-align: center;
+            color: #666;
+            padding: 40px;
+        }
+        .side-buy {
+            color: #007bff;
+            font-weight: bold;
+        }
+        .side-sell {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .status-confirmed {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        .status-settled {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-failed {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .number-positive {
+            color: #28a745;
+        }
+        .number-negative {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-banner">
+        <div class="header-content">
+            <div class="header-left">
+                Logged in as: <strong>{{ username }}</strong> ({{ tenant_name }})
+            </div>
+            <div class="header-right">
+                <a href="/form">Data Entry</a>
+                <a href="/view">View Data</a>
+                <a href="/import">Import Trades</a>
+                {% if role == 'admin' %}
+                <a href="/users">Manage Users</a>
+                {% endif %}
+                <a href="/logout" class="logout-link">Logout</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="view-container">
+            <h1>All Trades</h1>    
+            {% if trades %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Side</th>
+                        <th>Trade Date</th>
+                        <th>Security</th>
+                        <th>Quantity</th>
+                        <th>Currency</th>
+                        <th>Price</th>
+                        <th>Net Amount</th>
+                        <th>Broker</th>
+                        <th>Status</th>
+                        <th>Entered By</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trade in trades %}
+                    <tr>
+                        <td>{{ trade[0] }}</td>
+                        <td>
+                            <span class="{% if trade[1] == 'B' %}side-buy{% else %}side-sell{% endif %}">
+                                {{ trade[1] }}
+                            </span>
+                        </td>
+                        <td>{{ trade[2] }}</td>
+                        <td>{{ trade[3] }}</td>
+                        <td style="text-align: right;">{{ "{:,.2f}".format(trade[4]) }}</td>
+                        <td>{{ trade[5] }}</td>
+                        <td style="text-align: right;">{{ "{:.3f}".format(trade[6]) }}</td>
+                        <td style="text-align: right;" class="{% if trade[7] < 0 %}number-negative{% else %}number-positive{% endif %}">
+                            {{ "{:,.2f}".format(trade[7]) }}
+                        </td>
+                        <td>{{ trade[8] }}</td>
+                        <td>
+                            <span class="status-badge status-{{ trade[9]|lower }}">
+                                {{ trade[9] }}
+                            </span>
+                        </td>
+                        <td>{{ trade[11] }}</td>
+                        <td>{{ trade[10] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-message">
+                <p>No trades yet.</p>
+            </div>
+            {% endif %}
+            
+            <button type="button" class="btn" onclick="window.location.href='/form'">Add New Trade</button>
+        </div>
+    </div>
+</body>
+</html>

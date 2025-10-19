@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Import Trades</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .header-banner {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-left {
+            color: white;
+        }
+        .header-right {
+            display: flex;
+            gap: 20px;
+        }
+        .header-right a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .header-right a:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+        .header-right a.logout-link {
+            background-color: #dc3545;
+        }
+        .header-right a.logout-link:hover {
+            background-color: #c82333;
+        }
+        .main-content {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .info-box {
+            background-color: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin-bottom: 30px;
+        }
+        .info-box h3 {
+            color: #007bff;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .info-box p {
+            color: #555;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .info-box ul {
+            margin-left: 20px;
+            color: #555;
+            font-size: 14px;
+        }
+        .info-box li {
+            margin-bottom: 5px;
+        }
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            background-color: #f8f9fa;
+        }
+        .upload-area:hover {
+            background-color: #e9ecef;
+        }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        .file-input-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+        .btn-success:hover {
+            background-color: #218838;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .file-name {
+            margin-top: 15px;
+            color: #28a745;
+            font-weight: bold;
+        }
+        .alert {
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .template-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #007bff;
+            text-decoration: none;
+        }
+        .template-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-banner">
+        <div class="header-content">
+            <div class="header-left">
+                Logged in as: <strong>{{ username }}</strong> ({{ tenant_name }})
+            </div>
+            <div class="header-right">
+                <a href="/form">Data Entry</a>
+                <a href="/view">View Data</a>
+                <a href="/import">Import Trades</a>
+                {% if role == 'admin' %}
+                <a href="/users">Manage Users</a>
+                {% endif %}
+                <a href="/logout" class="logout-link">Logout</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="container">
+            <h1>Import Trades from CSV</h1>
+            <p class="subtitle">Upload a CSV file to import multiple trades at once</p>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <div class="info-box">
+                <h3>CSV Format Requirements</h3>
+                <p>Your CSV file must include the following columns (in any order):</p>
+                <ul>
+                    <li><strong>Required:</strong> side, trade_date, settlement_date, security, quantity, currency, price, broker_name</li>
+                    <li><strong>Optional:</strong> isin, cusip, iss_country, maturity_date, exec_time, exec_venue, yield, broker_code, trade_ref, seq_number, euroclear, status, notes</li>
+                </ul>
+                <p style="margin-top: 10px;"><strong>Date format:</strong> YYYY-MM-DD or DD/MM/YYYY</p>
+                <p><strong>Side values:</strong> B (Buy) or S (Sell)</p>
+            </div>
+            
+            <form action="/import" method="POST" enctype="multipart/form-data" id="uploadForm">
+                <div class="upload-area">
+                    <div class="file-input-wrapper">
+                        <button type="button" class="btn btn-primary">Choose CSV File</button>
+                        <input type="file" name="file" id="fileInput" accept=".csv" required>
+                    </div>
+                    <div id="fileName" class="file-name"></div>
+                </div>
+                
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" onclick="window.location.href='/view'">Cancel</button>
+                    <button type="submit" class="btn btn-success">Upload and Preview</button>
+                </div>
+            </form>
+            
+            <a href="/download-template" class="template-link">📥 Download CSV Template</a>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name;
+            const fileNameDiv = document.getElementById('fileName');
+            if (fileName) {
+                fileNameDiv.textContent = '✓ Selected: ' + fileName;
+            } else {
+                fileNameDiv.textContent = '';
+            }
+        });
+    </script>
+</body>
+</html>
