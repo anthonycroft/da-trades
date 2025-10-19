@@ -136,7 +136,16 @@ def parse_date(date_str):
         return None
     
     date_str = date_str.strip()
-    formats = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d']
+    # Try formats in priority order - US format (MM/DD) first for Bloomberg
+    formats = [
+        '%m/%d/%y',      # 09/13/22 (US format with 2-digit year) - BLOOMBERG DEFAULT
+        '%m/%d/%Y',      # 09/13/2022 (US format with 4-digit year)
+        '%Y-%m-%d',      # 2022-09-13 (ISO format)
+        '%Y/%m/%d',      # 2022/09/13
+        '%d/%m/%Y',      # 13/09/2022 (European format)
+        '%d/%m/%y',      # 13/09/22 (European format with 2-digit year)
+        '%y/%m/%d',      # 22/09/13
+    ]
     
     for fmt in formats:
         try:
@@ -441,58 +450,146 @@ def import_trades():
         return redirect(url_for('import_trades'))
     
     try:
-        # Read CSV file
-        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-        csv_reader = csv.DictReader(stream)
+        # Read CSV file - try multiple encodings
+        raw_content = file.stream.read()
+        csv_content = None
         
-        # Normalize column names (strip whitespace, lowercase)
-        fieldnames = [name.strip().lower() for name in csv_reader.fieldnames]
+        # Try different encodings
+        encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+        for encoding in encodings:
+            try:
+                csv_content = raw_content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if csv_content is None:
+            flash('Unable to decode file. Please ensure it is a valid CSV file.', 'error')
+            return redirect(url_for('import_trades'))
+        
+        lines = csv_content.split('\n')
+        
+        # Column name mappings (Bloomberg -> our format)
+        column_mappings = {
+            'side': ['side'],
+            'trade_date': ['trade dt', 'trade_dt', 'trade date', 'tradedate', 'trade_date'],
+            'settlement_date': ['setdt yr', 'setdt', 'set dt', 'settlement date', 'settlement_date', 'settledate', 'settle dt'],
+            'security': ['security', 'sec'],
+            'quantity': ['quantity', 'qty'],
+            'currency': ['curncy', 'currency', 'curr', 'ccy'],
+            'price': ['price', 'px'],
+            'broker_name': ['brkrname', 'broker name', 'broker_name', 'broker'],
+            'isin': ['isin'],
+            'cusip': ['cusip'],
+            'iss_country': ['iss country', 'iss_country', 'country'],
+            'maturity_date': ['mat dt', 'maturity date', 'maturity_date', 'mat_dt'],
+            'exec_time': ['exec time (gmt)', 'exec time', 'exec_time', 'execution time'],
+            'exec_venue': ['venue', 'exec venue', 'exec_venue'],
+            'yield': ['yield', 'yld'],
+            'broker_code': ['brkr', 'broker code', 'broker_code'],
+            'trade_ref': ['ts tkt#', 'trade ref', 'trade_ref', 'ref', 'ticket'],
+            'seq_number': ['seq#', 'seq', 'sequence'],
+            'status': ['status'],
+            'notes': ['notes', 'comments']
+        }
+        
+        # Find the header row (first row that contains key column names)
+        header_row_idx = -1
+        header_row = None
+        key_indicators = ['side', 'quantity', 'security', 'price']
+        
+        for idx, line in enumerate(lines):
+            if not line.strip():
+                continue
+            # Try to parse as CSV
+            cells = list(csv.reader([line]))[0]
+            # Normalize cell names
+            normalized_cells = [cell.strip().lower() for cell in cells]
+            # Check if this looks like a header row
+            matches = sum(1 for indicator in key_indicators if any(indicator in cell for cell in normalized_cells))
+            if matches >= 3:  # At least 3 key columns present
+                header_row_idx = idx
+                header_row = cells
+                break
+        
+        if header_row_idx == -1:
+            flash('Could not find valid header row in CSV file. Please ensure the file contains column headers.', 'error')
+            return redirect(url_for('import_trades'))
+        
+        # Parse CSV starting from header row
+        csv_lines = lines[header_row_idx:]
+        csv_stream = io.StringIO('\n'.join(csv_lines))
+        csv_reader = csv.DictReader(csv_stream)
+        
+        # Normalize fieldnames and create mapping
+        # IMPORTANT: Strip spaces and normalize
+        normalized_headers = {}
+        for h in csv_reader.fieldnames:
+            if h:
+                # Clean the header name
+                clean_name = h.strip().lower()
+                normalized_headers[clean_name] = h
+        
+        # Map Bloomberg columns to our expected columns
+        column_map = {}
+        for our_col, possible_names in column_mappings.items():
+            for possible_name in possible_names:
+                if possible_name in normalized_headers:
+                    column_map[our_col] = normalized_headers[possible_name]
+                    break
         
         # Check required columns
         required_cols = ['side', 'trade_date', 'settlement_date', 'security', 
                         'quantity', 'currency', 'price', 'broker_name']
-        missing_cols = [col for col in required_cols if col not in fieldnames]
+        missing_cols = [col for col in required_cols if col not in column_map]
         
         if missing_cols:
-            flash(f'Missing required columns: {", ".join(missing_cols)}', 'error')
+            flash(f'Missing required columns: {", ".join(missing_cols)}. Found columns: {", ".join(normalized_headers.keys())}', 'error')
             return redirect(url_for('import_trades'))
         
         # Parse and validate trades
         trades_to_import = []
         errors = []
-        row_num = 1
+        row_num = header_row_idx + 1
         
         for row in csv_reader:
             row_num += 1
-            # Normalize keys
-            row = {k.strip().lower(): v for k, v in row.items()}
+            
+            # Skip empty rows
+            if not any(row.values()):
+                continue
+            
+            # Map columns using our mapping
+            mapped_row = {}
+            for our_col, original_col in column_map.items():
+                mapped_row[our_col] = row.get(original_col, '')
             
             try:
                 # Validate required fields
-                side = row.get('side', '').strip().upper()
+                side = mapped_row.get('side', '').strip().upper()
                 if side not in ['B', 'S']:
                     errors.append(f"Row {row_num}: Invalid side '{side}' (must be B or S)")
                     continue
                 
-                trade_date = parse_date(row.get('trade_date'))
-                settlement_date = parse_date(row.get('settlement_date'))
+                trade_date = parse_date(mapped_row.get('trade_date'))
+                settlement_date = parse_date(mapped_row.get('settlement_date'))
                 
                 # Validate settlement date > trade date
                 trade_dt = datetime.strptime(trade_date, '%Y-%m-%d')
                 settle_dt = datetime.strptime(settlement_date, '%Y-%m-%d')
                 if settle_dt <= trade_dt:
-                    errors.append(f"Row {row_num}: Settlement date must be after trade date")
+                    errors.append(f"Row {row_num}: Settlement date ({settlement_date}) must be after trade date ({trade_date})")
                     continue
                 
-                security = row.get('security', '').strip()
+                security = mapped_row.get('security', '').strip()
                 if not security:
                     errors.append(f"Row {row_num}: Security is required")
                     continue
                 
-                quantity = float(row.get('quantity', '0').replace(',', ''))
-                currency = row.get('currency', '').strip().upper()
-                price = float(row.get('price', '0').replace(',', ''))
-                broker_name = row.get('broker_name', '').strip()
+                quantity = float(mapped_row.get('quantity', '0').replace(',', ''))
+                currency = mapped_row.get('currency', '').strip().upper()
+                price = float(mapped_row.get('price', '0').replace(',', ''))
+                broker_name = mapped_row.get('broker_name', '').strip()
                 
                 if not broker_name:
                     errors.append(f"Row {row_num}: Broker name is required")
@@ -506,18 +603,21 @@ def import_trades():
                     net_amount = -abs(net_amount)
                 
                 # Optional fields
-                exec_time_str = row.get('exec_time', '').strip()
+                exec_time_str = mapped_row.get('exec_time', '').strip()
                 exec_time = None
                 if exec_time_str:
                     try:
                         exec_time = datetime.strptime(exec_time_str, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S')
                     except:
-                        pass
+                        try:
+                            exec_time = datetime.strptime(exec_time_str, '%m/%d/%Y %H:%M').strftime('%Y-%m-%d %H:%M:%S')
+                        except:
+                            pass
                 
-                maturity_date = parse_date(row.get('maturity_date', ''))
+                maturity_date = parse_date(mapped_row.get('maturity_date', ''))
                 
                 yield_val = None
-                yield_str = row.get('yield', '').strip()
+                yield_str = mapped_row.get('yield', '').strip()
                 if yield_str:
                     try:
                         yield_val = float(yield_str.replace(',', ''))
@@ -530,23 +630,23 @@ def import_trades():
                     'settlement_date': settlement_date,
                     'exec_time': exec_time,
                     'security': security,
-                    'isin': row.get('isin', '').strip() or None,
-                    'cusip': row.get('cusip', '').strip() or None,
-                    'iss_country': row.get('iss_country', '').strip() or None,
+                    'isin': mapped_row.get('isin', '').strip() or None,
+                    'cusip': mapped_row.get('cusip', '').strip() or None,
+                    'iss_country': mapped_row.get('iss_country', '').strip() or None,
                     'maturity_date': maturity_date,
                     'quantity': quantity,
                     'currency': currency,
                     'price': price,
                     'net_amount': net_amount,
                     'yield': yield_val,
-                    'exec_venue': row.get('exec_venue', '').strip() or None,
+                    'exec_venue': mapped_row.get('exec_venue', '').strip() or None,
                     'broker_name': broker_name,
-                    'broker_code': row.get('broker_code', '').strip() or None,
-                    'trade_ref': row.get('trade_ref', '').strip() or None,
-                    'seq_number': row.get('seq_number', '').strip() or None,
-                    'euroclear': row.get('euroclear', '').strip() or None,
-                    'status': row.get('status', 'Pending').strip(),
-                    'notes': row.get('notes', '').strip() or None
+                    'broker_code': mapped_row.get('broker_code', '').strip() or None,
+                    'trade_ref': mapped_row.get('trade_ref', '').strip() or None,
+                    'seq_number': mapped_row.get('seq_number', '').strip() or None,
+                    'euroclear': mapped_row.get('euroclear', '').strip() or None,
+                    'status': mapped_row.get('status', 'Pending').strip() or 'Pending',
+                    'notes': mapped_row.get('notes', '').strip() or None
                 }
                 
                 trades_to_import.append(trade_data)
